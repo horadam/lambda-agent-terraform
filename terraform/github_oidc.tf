@@ -1,0 +1,162 @@
+locals {
+  github_repo = "horadam/lambda-agent-terraform"
+}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  # Well-known thumbprints for token.actions.githubusercontent.com
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "1c58a3a8518e8759bf075b76b750d4f2df264fcd",
+  ]
+}
+
+data "aws_iam_policy_document" "github_actions_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+    # Security boundary: only workflows from this specific repo can assume this role.
+    # The sub claim format is repo:OWNER/REPO:ref:refs/heads/BRANCH or :pull_request.
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values = [
+        "repo:${local.github_repo}:ref:refs/heads/main",
+        "repo:${local.github_repo}:pull_request",
+      ]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions" {
+  name               = "${var.project_name}-github-actions"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+  tags               = local.tags
+}
+
+data "aws_iam_policy_document" "github_actions_permissions" {
+  # Lambda
+  statement {
+    actions = [
+      "lambda:CreateFunction",
+      "lambda:UpdateFunctionCode",
+      "lambda:UpdateFunctionConfiguration",
+      "lambda:GetFunction",
+      "lambda:GetFunctionConfiguration",
+      "lambda:DeleteFunction",
+      "lambda:ListFunctions",
+      "lambda:AddPermission",
+      "lambda:RemovePermission",
+      "lambda:GetPolicy",
+      "lambda:TagResource",
+      "lambda:UntagResource",
+      "lambda:ListTags",
+      "lambda:CreateFunctionUrlConfig",
+      "lambda:UpdateFunctionUrlConfig",
+      "lambda:GetFunctionUrlConfig",
+      "lambda:DeleteFunctionUrlConfig",
+    ]
+    resources = ["*"]
+  }
+
+  # IAM — scoped to resources this project manages
+  statement {
+    actions = [
+      "iam:CreateRole",
+      "iam:GetRole",
+      "iam:DeleteRole",
+      "iam:UpdateRole",
+      "iam:AttachRolePolicy",
+      "iam:DetachRolePolicy",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListRolePolicies",
+      "iam:GetRolePolicy",
+      "iam:PassRole",
+      "iam:TagRole",
+      "iam:UntagRole",
+      "iam:ListInstanceProfilesForRole",
+      "iam:CreatePolicy",
+      "iam:GetPolicy",
+      "iam:DeletePolicy",
+      "iam:GetPolicyVersion",
+      "iam:ListPolicyVersions",
+      "iam:CreatePolicyVersion",
+      "iam:DeletePolicyVersion",
+      "iam:TagPolicy",
+    ]
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-*",
+    ]
+  }
+
+  # OIDC provider — needed to manage the provider itself on subsequent applies
+  statement {
+    actions = [
+      "iam:CreateOpenIDConnectProvider",
+      "iam:GetOpenIDConnectProvider",
+      "iam:DeleteOpenIDConnectProvider",
+      "iam:TagOpenIDConnectProvider",
+      "iam:UpdateOpenIDConnectProviderThumbprint",
+    ]
+    resources = ["*"]
+  }
+
+  # Secrets Manager — scoped to this project's secrets
+  statement {
+    actions = [
+      "secretsmanager:CreateSecret",
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:PutSecretValue",
+      "secretsmanager:DeleteSecret",
+      "secretsmanager:TagResource",
+      "secretsmanager:GetResourcePolicy",
+      "secretsmanager:ListSecretVersionIds",
+    ]
+    resources = [
+      "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/*",
+    ]
+  }
+
+  # CloudWatch Logs — scoped to this function's log group
+  statement {
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:DeleteLogGroup",
+      "logs:DescribeLogGroups",
+      "logs:ListTagsLogGroup",
+      "logs:ListTagsForResource",
+      "logs:PutRetentionPolicy",
+      "logs:TagLogGroup",
+      "logs:TagResource",
+    ]
+    resources = [
+      "arn:aws:logs:*:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}*",
+    ]
+  }
+}
+
+resource "aws_iam_policy" "github_actions" {
+  name   = "${var.project_name}-github-actions"
+  policy = data.aws_iam_policy_document.github_actions_permissions.json
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.github_actions.arn
+}
+
+output "github_actions_role_arn" {
+  description = "IAM role ARN for GitHub Actions to assume via OIDC."
+  value       = aws_iam_role.github_actions.arn
+}
