@@ -144,6 +144,32 @@ data "aws_iam_policy_document" "github_actions_permissions" {
       "arn:aws:logs:*:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}*",
     ]
   }
+
+  # S3 — Terraform remote state bucket
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:ListBucket",
+    ]
+    resources = [
+      "arn:aws:s3:::lambda-agent-tfstate-084375583552",
+      "arn:aws:s3:::lambda-agent-tfstate-084375583552/*",
+    ]
+  }
+
+  # DynamoDB — Terraform state locking
+  statement {
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:DeleteItem",
+    ]
+    resources = [
+      "arn:aws:dynamodb:*:${data.aws_caller_identity.current.account_id}:table/lambda-agent-terraform-locks",
+    ]
+  }
 }
 
 resource "aws_iam_policy" "github_actions" {
