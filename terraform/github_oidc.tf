@@ -54,6 +54,7 @@ data "aws_iam_policy_document" "github_actions_permissions" {
       "lambda:GetFunctionConfiguration",
       "lambda:DeleteFunction",
       "lambda:ListFunctions",
+      "lambda:ListVersionsByFunction",
       "lambda:AddPermission",
       "lambda:RemovePermission",
       "lambda:GetPolicy",
