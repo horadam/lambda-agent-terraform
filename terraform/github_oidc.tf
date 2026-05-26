@@ -128,12 +128,17 @@ data "aws_iam_policy_document" "github_actions_permissions" {
     ]
   }
 
-  # CloudWatch Logs — scoped to this function's log group
+  # CloudWatch Logs — describe/list actions require * resource
+  statement {
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+
+  # CloudWatch Logs — write actions scoped to this function's log group
   statement {
     actions = [
       "logs:CreateLogGroup",
       "logs:DeleteLogGroup",
-      "logs:DescribeLogGroups",
       "logs:ListTagsLogGroup",
       "logs:ListTagsForResource",
       "logs:PutRetentionPolicy",
