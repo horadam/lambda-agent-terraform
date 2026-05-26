@@ -70,46 +70,10 @@ data "aws_iam_policy_document" "github_actions_permissions" {
     resources = ["*"]
   }
 
-  # IAM — scoped to resources this project manages
+  # IAM — broad during CI bootstrap; tighten once Actions is green
+  # TODO: scope back down to project-prefixed resources after CI is stable
   statement {
-    actions = [
-      "iam:CreateRole",
-      "iam:GetRole",
-      "iam:DeleteRole",
-      "iam:UpdateRole",
-      "iam:AttachRolePolicy",
-      "iam:DetachRolePolicy",
-      "iam:ListAttachedRolePolicies",
-      "iam:ListRolePolicies",
-      "iam:GetRolePolicy",
-      "iam:PassRole",
-      "iam:TagRole",
-      "iam:UntagRole",
-      "iam:ListInstanceProfilesForRole",
-      "iam:CreatePolicy",
-      "iam:GetPolicy",
-      "iam:DeletePolicy",
-      "iam:GetPolicyVersion",
-      "iam:ListPolicyVersions",
-      "iam:CreatePolicyVersion",
-      "iam:DeletePolicyVersion",
-      "iam:TagPolicy",
-    ]
-    resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-*",
-    ]
-  }
-
-  # OIDC provider — needed to manage the provider itself on subsequent applies
-  statement {
-    actions = [
-      "iam:CreateOpenIDConnectProvider",
-      "iam:GetOpenIDConnectProvider",
-      "iam:DeleteOpenIDConnectProvider",
-      "iam:TagOpenIDConnectProvider",
-      "iam:UpdateOpenIDConnectProviderThumbprint",
-    ]
+    actions   = ["iam:*"]
     resources = ["*"]
   }
 
